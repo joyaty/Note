@@ -125,3 +125,41 @@ AssetBundle可以指两个不同但关联的东西。一是硬盘上的真实文
 另外，AssetBundle也可以指代码中创建的AssetBundle Object，可以加载硬盘中AssetBundle Archive，包含了加载进内存的AssetBundle Archive中所有资产的路径映射。
 
 *P.S. AssetBundle Manager是旧版本的Unity用来简化管理和使用AssetBundle的工具，在2018.2版本后，应该使用Addressable Assets来替代AssetBundle Manager。*
+
+资产归档AssetBundle的一些策略：
+
+- 按逻辑实体归档（Logic Entity Grouping），比如同一角色的模型和动作，相同UI的纹理和布局等等。
+- 按资产类别归档（Type Grouping），比如多平台通用的音频文件或者本地化文件，可以归档为单一的AssetBundle。
+- 并行内容归档（Concurrent Content Grouping），指一些会被同时加载和使用的资产归档在同一个AssetBundle中。比如不同关卡中有一些关卡使用的唯一的角色、纹理、音乐等。
+
+其他一些Tips：
+
+- AssetBundle中一些经常变更的资产最好和不经常变更的资产分离开。
+- 对可能同时加载的资产归档，比如一个模型，以及关联的贴图，动作等。
+- 多个AssetBundle中的多个Asset依赖于另一个完全不同的AssetBundle的一个Asset，那么可以将依赖关系分离出来，单独组成一个AssetBundle。如果一些AssetBundle依赖于另一些AssetBundle中的相同一组Asset，那么可以将这些依赖分离为一个公用的AssetBundle，以减少资源重复。
+- 如果两组Asset不可能同时加载进来，比如标准和高清Asset，那么他们需要有自己的AssetBundle。
+- 如果经常加载和使用一个AssetBundle中少于50%的资源，那么可以考虑将这些资源拆分。
+- 如果一些AssetBundle中Asset较少（少于5 - 10个资产），但需要经常加载使用，那么可以考虑将这些AssetBundle合并。
+- 如果一组资产对象为同一对象的不同版本，那么考虑使用AssetBundle的变量（Variants）。
+
+可以通过Unity提供的**BuildPipeline.BuildAssetBundles**方法构建AssetBundle。
+
+```c#
+BuildPipeline.BuildAssetBundles("outPath", BuildAssetBundleOptions.None, BuildTarget.StandaloneWindows);
+```
+
+**BuildAssetBundleOptions**可以通过组合来搭配不同的构建选项，其中，有三种选项处理AssetBundle的压缩策略：
+
+- **BuildAssetBundleOptions.None**：这个选项默认使用**LZMA**格式压缩。LZMA格式需要在使用包内资源时首先解压缩整包。LZMA可以构建尽可能小的文件大小的AssetBundle包，但是更长的加载时间，因为需要整包解压。一旦AssetBundle解压后，会在磁盘上重新以LZ4格式重新压缩，这个压缩格式的好处是使用包内资源时，不再需要整包解压。仅在需要从远程服务器下载AssetBundle时推荐使用LZMA格式压缩，因为这可以尽可能的减少网络传输的数据量。通过**UnityWebRequestAssetBundle**下载的AssetBundle将会自动的重新以LZ4格式压缩并保存到本地文件系统中，而以其他方式下载和保存的，可以调用**AssetBundle.RecompressAssetBundleAsync**来重新压缩。
+- **BuildAssetBundleOptions.UncompressedAssetBundle**：这个选项构建的AssetBundle将完全不压缩。这会导致比较大的包体大小，但是加载时间更短。
+- **BuildAssetBundleOptions.ChunkBasedCompression**：这个选项构建的AssetBundle以**LZ4**格式压缩，包体会比LZMA格式的要大，但是更短的加载时间，因为不需要整包解压缩。LZ4使用基于块（Chunk）的压缩算法，在使用包内资产时，可以只解压对应资产所在的块，而其他未使用的块则不需要解压。
+
+还可以使用**BuildTarget**来告诉Unity我们为哪个目标平台构建AssetBundle。如果不想通过硬编码（hardcode）方式来指定构建平台，可以使用EditorUserBuildSettings.activeBuildTarget，这样可以自动检测当前构建使用的平台，以此平台来构建相应的AssetBundle。
+
+调用**BuildPipeline.BuildAssetBundles**构建AssetBundle后，可以在输出目录下看到构建完成的AssetBundle。可以看到生成的文件数为2(n+1)（n为Unity中指定的AssetBundle数量，不包括.mete文件），每个在Unity中指定的AssetBundle多有一个对应名称的文件和.manifest后缀的文件。此外，还有一个输出目录所在名称的AssetBundle文件和对应的.manifest文件。
+
+AssetBundle文件的内部结构：
+
+![1.AssetBundles-Building](images/1.AssetBundles-Building.png)
+
+一个序列化文件和若干的资源文件。
