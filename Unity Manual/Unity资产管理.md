@@ -156,10 +156,15 @@ BuildPipeline.BuildAssetBundles("outPath", BuildAssetBundleOptions.None, BuildTa
 
 还可以使用**BuildTarget**来告诉Unity我们为哪个目标平台构建AssetBundle。如果不想通过硬编码（hardcode）方式来指定构建平台，可以使用EditorUserBuildSettings.activeBuildTarget，这样可以自动检测当前构建使用的平台，以此平台来构建相应的AssetBundle。
 
-调用**BuildPipeline.BuildAssetBundles**构建AssetBundle后，可以在输出目录下看到构建完成的AssetBundle。可以看到生成的文件数为2(n+1)（n为Unity中指定的AssetBundle数量，不包括.mete文件），每个在Unity中指定的AssetBundle多有一个对应名称的文件和.manifest后缀的文件。此外，还有一个输出目录所在名称的AssetBundle文件和对应的.manifest文件。
+调用**BuildPipeline.BuildAssetBundles**构建AssetBundle后，可以在输出目录下看到构建完成的AssetBundle。可以看到生成的文件数为2(n+1)（n为Unity中指定的AssetBundle数量，不包括.mete文件），每个在Unity中指定的AssetBundle多有一个对应名称的文件和.manifest后缀的文件。此外，还有一个输出目录所在名称的AssetBundle文件和对应的.manifest文件，这个AssetBundle被称为Manifest AssetBundle。
 
-AssetBundle文件的内部结构：
+AssetBundle文件是在运行中加载的文件，加载后可以即可使用包内的资产。前面说过AssetBundle其实是一个容器文件，通常情况下，其内部的文件结构如下所示：
 
 ![1.AssetBundles-Building](images/1.AssetBundles-Building.png)
 
-一个序列化文件和若干的资源文件。
+包含了一个序列化文件和若干的资源文件。场景资产文件会有些许不同，在其内部对场景的流加载和内容做了一些优化。
+
+每个AssetBundle文件在生成时，都会同时生成一个.manifest后缀的同名文件。Manifest文件可以被文本编辑器打开，并且包含了AssetBundle的CRC数据（Cyclic Redunacy Check，循环冗余校验）、依赖数据以及包含的资产。
+
+同样的，Manifest Bundle也会生成一个.manifest文件，这个manifest文件的内容和其他的不一样，它主要记录各个AssetBundle间如何关联，以及依赖关系是怎样的，这对在运行时如何加载AssetBundle的依赖项非常重要。
+
