@@ -80,7 +80,7 @@ AssetDatabase.DeleteAsset("Assets/Asset3.txt");
 
 上面代码进行和复制、移动、删除上个资产变更，Asset Database默认是按顺序处理每个资产变更，只有当前资产的刷新流程完成后，才会执行下面一行代码，这会浪费大量的时间在刷新资产上。
 
-可以使用批量操作来避免多次的资产刷新行为，Unity提供了**AssetDatabase.StartAssetEditing**和**AssetDatabase.StopAssetEditing**来标记资产变更行为的开始和结束，在这两个函数中间，可以任意加入资产变更的代码，Unity将会在AssetDatabase.StopAssetEditing后，进行资产刷新操作，批量一次刷新之间的所有资产变更。注意，如果嵌套的调用**AssetDatabase.StartAssetEditing**和**AssetDatabase.StopAssetEditing**，必须保证能够成对匹配，其内部实现机制是一个计数器，而不是简单的开关，不能成对匹配会导致最终的计数结果不为0，而Asset Database在计数器为0时才会恢复正常的资产刷新，而且不要是的计数器小于0，这会产生一个Error错误。
+可以使用批量操作来避免多次的资产刷新行为，Unity提供了**AssetDatabase.StartAssetEditing**和**AssetDatabase.StopAssetEditing**来标记资产变更行为的开始和结束，在这两个函数中间，可以任意加入资产变更的代码，Unity将会在AssetDatabase.StopAssetEditing后，进行资产刷新操作，批量一次刷新之间的所有资产变更。注意，如果嵌套的调用**AssetDatabase.StartAssetEditing**和**AssetDatabase.StopAssetEditing**，必须保证能够成对匹配，其内部实现机制是一个计数器，而不是简单的开关，不能成对匹配会导致最终的计数结果不为0，而Asset Database在计数器为0时才会恢复正常的资产刷新，而且不要使得计数器小于0，这会产生一个Error错误。
 
 ```c#
 using UnityEditor;
@@ -168,3 +168,124 @@ AssetBundle文件是在运行中加载的文件，加载后可以即可使用包
 
 同样的，Manifest Bundle也会生成一个.manifest文件，这个manifest文件的内容和其他的不一样，它主要记录各个AssetBundle间如何关联，以及依赖关系是怎样的，这对在运行时如何加载AssetBundle的依赖项非常重要。
 
+如果AssetBundle中的一些资产引用了另外的AssetBundle的资产，那个这两AssetBundle就会产生依赖关系。Unity在加载AssetBundle时，不会尝试自动加载依赖项。因此，从AssetBundle加载和使用存在依赖项的Asset时，先把依赖项的AssetBundle加载进内存是必要的。
+
+然而，如果被依赖的资产不被归档到任何一个AssetBundle中，那就不会产生依赖关系。在AssetBundle打包时，会将被依赖的不被归档的Asset的一份拷贝同样打包进AssetBundle中。如果多个AssetBundle中的多个资产都引用了这个不被归档的Asset，那么就会有多个拷贝被分别打包进了存在引用的AssetBundle中，这会导致资源冗余！
+
+Unity提供了四种不同的API用于加载AssetBundle。这些API在不同平台和不同的压缩策略下，行为会有所不同。
+
+- **AssetBundle.LoadFromMemoryCache**：API接收两个参数，一个是AssetBundle的字节数组数据，和可选的CRC参数。LZMA压缩格式的AssetBundle，在加载时将被解压，LZ4压缩格式将保持其压缩状态。示例代码如下，
+
+  ```c#
+  AssetBundleCreateRequest createRequest = AssetBundle.LoadFromMemoryAsync(File.ReadAllByte(path));
+  yield return createRequest;
+  AssetBundle bundle = createRequest.assetBundle;
+  var prefab = bundle.LoadAsset<GameObject>("MyObject");
+  Instantiate(prefab);
+  ```
+
+- **AssetBundle.LoadFromFile**：可以高效的从本地存储中加载未压缩的AssetBundle。可以直接从硬盘中加载未压缩格式和LZ4压缩格式，加载LZMA格式，在加载在内存中时，需要先解压缩。示例代码如下（Unity5.3及以下Android设备上尝试从streamingAssetsPath加载将会失败，因为该路径下的内容被驻留在.jar的压缩文件中。5.4及以上能够正常使用）。
+
+  ```c#
+  var myLoadedAssetBundle = AssetBundle.LoadFromFile(Path.Combine(Application.streamingAssetsPath, "myassetBundle"));
+  if (myLoadedAssetBundle == null)
+  {
+      Debug.Log("Failed to load AssetBundle!");
+      return;
+  }
+  var prefab = myLoadAssetBundle.LoadAsset<GameObject>("myObject");
+  Instantiate(prefab);
+  ```
+
+- **WWW.LoadFromCacheOrDownload**：可以从远程服务器或是本地加载AssetBundle，是UnityWebRequest API的旧版本实现，**现在已经不推荐使用**。从远程服务器下载的AssetBundle将会自动缓存在本地文件系统中，如果是压缩的，会启动工作线程解压再写入到缓存中。一旦下载解压并缓存成功，即可使用**AssetBundle.LoadFromFile**来加载。示例代码如下：
+
+  ```c#
+  while (!Caching.ready)
+  {
+      yield return null;
+  }
+  // 第二个参数为版本，Unity会从缓存中载入符合版本的AssetBundle，如果缓存中缺失对应版本，会去下载相应版本的AssetBundle
+  var www = www.LoadFromCacheOrDownload("http://server/myassetbundle", 5);
+  yield return www;
+  if (!string.isNullOrEmpty(www.error))
+  {
+      Debug.Load(www.error);
+      yield return;
+  }
+  var myLoadedAssetBundle = www.assetBundle;
+  var asset = myLoadedAssetBundle.mainAsset;
+  ```
+
+  因为WWW对象的主要内存花销是缓存AssetBundle的字节数据，因此建议使用**WWW.LoadFromCacheOrDownload**加载的AssetBundle应该足够小（应该最多几MB）。此外，如果在内存受限的平台，比如手机，需要保证同一时间只下载一个AssetBundle，避免内存使用达到高峰。如果缓存空间不足，Unity会删除一些低使用率的AssetBundle来保证足够的缓存空间，如果无法满足缓存空间要求（比如硬盘已满或是所有AssetBundle都在使用），Unity会绕过缓存，直接输入到内存中。
+
+- **UnityWebRequest的DownloadHandlerAssetBundle**（Unity5.3及以上）：UnityWebRequest有一个特定的API用来处理AssetBundle，是UnityEngine.WWW的替代API。它允许开发人员更灵活的处理下载数据，并且可能减少不必要的内存使用（不提供version参数，则Unity使用内存缓存，提供version参数，则使用硬盘缓存）。示例代码如下：
+
+  ```c#
+  IEnumerator InstantiateObject()
+  {
+      string uri = "file:///" + Application.dataPath + "/AssetBundles/" + assetBundleName;
+      UnityEngine.Networking.UnityWebRequest request = UnityEngine.Networking.UnityWebRequestAssetBundle.GetAssetBundle(uri, 0);
+      yield return request.SendWebRequest();
+      AssetBundle bundle = DownloadHandlerAssetBundle.GetContent(request);
+      GameObject cube = bundle.LoadAsset<GameObject>("Cube");
+      GameObject sprite = bundle.LoadAsset<GameObject>("Sprite");
+      Instantiate(cube);
+      Instantiate(sprite);
+  }
+  // 外部，通过协程启用
+  StartCoroutine(InstantiateObject());
+  ```
+
+为了优化通过**WWW**或者**UnityWebRequest（UWR）**获取的LZMA压缩AssetBundle，Unity维护两个缓存：
+
+- **内存缓存（The Memeroy Cache）**：以UncompressedRuntime形式在内存中存储AssetBundle。
+- **硬盘缓存（The Disk Cache）**：以设置的压缩格式存储在可写入媒介上（**Caching.compressionEnable**为True，随后下载的AssetBundle以LZ4压缩写入，原有的AssetBundle不变，为False，则无压缩写入）。
+
+加载完成AssetBundle，便可使用一系列API加载AssetBundle中的Asset。
+
+```c#
+GameObject gameObject = loadedAssetBundle.LoadAsset<GameObject>(assetName); // 加载指定的Asset
+Unity.Object[] objectArray = loadedAssetBundle.LoadAllAssets();	// 加载全部Asset
+AssetBundleRequest request = loadedAssetBundle.LoadAssetAsync<GameObject>(assetName); // 异步加载指定Asset
+yield return request;
+var loadAsset = request.asset;
+AssetBundleRequest request = loadedAssetBundle.LoadAllAssetsAsync(); // 异步加载全部Asset
+yield return request;
+var loadAssets = request.allAssets;
+```
+
+前文说过如果AssetBundle存在依赖，在从AssetBundle中加载Asset时，需要确保依赖项的AssetBundle已经被加载。Manifest AssetBundle中的.manifest后缀文件记录了各个AssetBundle以及依赖关系。我们可以像加载其他AssetBundle一样，加载AssetBundle Manifest。
+
+```c#
+AssetBundle bundle = AssetBundle.LoadFromFile(manifestFilePath);
+AssetBundleManifest manifest = bundle.LoadAsset<AssetBundleManifest>("AssetBundleManifest");
+string[] dependencies = manifest.GetAllDependencies("TargetAssetBundleName"); // 替换为需要查找依赖关系目标AssetBundle
+foreach (string strDependence in dependencies)
+{
+    AssetBundle.LoadFromeFile(Path.Combine(assetBundle, strDependency));	// 加载依赖的AssetBundle
+}
+```
+
+当场景中的对象被移除时，Unity不会自动的卸载该对象关联的Asset和AssetBundle。因此开发人员需要自己控制合适应该卸载Asset以及AssetBundle。
+
+Unity提供了**AssetBundle.Unload(bool)**非静态函数来卸载AssetBundle。函数接收一个bool变量来决定卸载的方式，false时卸载AssetBundle的头部信息，true时则卸载AssetBundle中关联的所有对象实例以及依赖。
+
+假设Material M是带入AssetBundle后创建的一个示例对象，则M与AssetBundle存在关联关系
+
+![1.AssetBundlesNative1](images/1.AssetBundlesNative1.png)
+
+调用**AssetBundle.Unload(false)**，会切断AssetBundle和M对象的关联关系，M对象不再属于任何一个AssetBundle。重新调用AssetBundle.LoadAsset后，Unity也不会重新创建AssetBundle和已存在M对象的关联关系，而是创建一个新的M对象实例，此时内存中会存在两个相同Material的对象。
+
+![](images/1.AssetBundlesNative2.png)
+
+![1.AssetBundlesNative3](images/1.AssetBundlesNative3.png)
+
+因此，大部分项目中应该使用**AssetBunlde.Unload(true)**，并采用一些策略来规避在内存中产生重复的资产对象：
+
+- 在关卡或场景切换等一些明确的游戏时间点上，明确定义需要卸载的AssetBundle。
+- 对资产加入引用计数机制，没有引用的资产才卸载。
+
+对于必须要使用**AssetBundle.Unload(false)**，有两种方式可以卸载无关联的对象：
+
+- 解除全部改对象的引用，包括场景和代码中，然后调用**Resource.UnloadUnusedAssets**。
+- 非累加（non-additively）的载入场景，这样销毁当前场景全部的对象，比自动调用**Resource.UnloadUnusedAssets**。
