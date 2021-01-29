@@ -241,6 +241,8 @@ Unity提供了四种不同的API用于加载AssetBundle。这些API在不同平�
 - **内存缓存（The Memeroy Cache）**：以UncompressedRuntime形式在内存中存储AssetBundle。
 - **硬盘缓存（The Disk Cache）**：以设置的压缩格式存储在可写入媒介上（**Caching.compressionEnable**为True，随后下载的AssetBundle以LZ4压缩写入，原有的AssetBundle不变，为False，则无压缩写入）。
 
+**AssetBundle.LoadFromFile**和**AssetBundle.LoadFromFileAsync**在处理LZMA压缩的AssetBundle是，总是会使用内存缓存。因此在加载LZMA压缩的AssetBunle，可以优先使用UWR提供的API。如果无法使用UWR，则可以使用**AssetBunle.RecompressAssetBundleAsync**来重写到硬盘缓存上。
+
 加载完成AssetBundle，便可使用一系列API加载AssetBundle中的Asset。
 
 ```c#
