@@ -291,3 +291,14 @@ Unity提供了**AssetBundle.Unload(bool)**非静态函数来卸载AssetBundle。
 
 - 解除全部改对象的引用，包括场景和代码中，然后调用**Resource.UnloadUnusedAssets**。
 - 非累加（non-additively）的载入场景，这样销毁当前场景全部的对象，比自动调用**Resource.UnloadUnusedAssets**。
+
+------
+
+### Unity AssetBundle Brower Tool
+
+Unity AssetBundle Brower Tool是Unity官方提供的查看编辑构建AssetBundle的拓展工具，通过[Unity官方GitHub库](https://github.com/Unity-Technologies/AssetBundles-Browser)下载并安装（拷贝Editor目录到项目中），在**Window->AssetBundle Brower**即可打开窗口。
+
+![1.AssetBundlesBrowserIntroduction](images/1.AssetBundlesBrowserIntroduction.jpg)
+
+------
+
