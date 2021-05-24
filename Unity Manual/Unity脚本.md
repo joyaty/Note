@@ -20,3 +20,15 @@ OnDisable/OnDestroy，在一帧的最后被调用。挂载在GameObject上的某
 
 Tip：**代码执行应该永远不依赖与GameObject脚本的执行顺序，而应该依赖于确定的不同Event的执行顺序。**
 
+------
+
+### UnityEvents
+
+UnityEvents定义在命名空间**UnityEngine.Events**中。可以在Unity脚本中添加UnityEvents的public成员，Inspector窗口中将会出现UnityEvents成员的可配置项，我们可以指定Event生效的时机，选择一个GameObject作为事件的接收者，并选择该GameObject上（以及添加的Component上）的方法作为事件回调处理的方法。
+
+![3.UnityEventsConfig](images/3.UnityEventsConfig.png)
+
+回调可以传递参数，有静态（Static）和动态（Dynamic）两种方式传递。静态方式为在Inspector中配置各个参数，动态方式为使用带泛型参数的**UnityEvents<T0[,T1,T2,T3]>**，然后在代码中使用Invoke方法，传递所需要的参数（Unity最多支持4个泛型参数）。
+
+------
+
